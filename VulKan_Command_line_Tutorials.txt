@@ -1,0 +1,26 @@
+Install Cmake
+	Cmake-->Add CMake to the system PATH for all users
+
+Command Prommp
+
+C:\Users\ZHU>cd ..
+
+C:\Users>cd ..
+
+C:\>cd VulkanSDK
+
+C:\VulkanSDK>dir
+
+C:\VulkanSDK>cd 1.0.42.1
+
+C:\VulkanSDK\1.0.42.1>cd glslang
+
+C:\VulkanSDK\1.0.42.1\glslang>mkdir build
+
+C:\VulkanSDK\1.0.42.1\glslang>cd build
+
+C:\VulkanSDK\1.0.42.1\glslang\build>cmake   #this is for run the Cmake
+
+C:\VulkanSDK\1.0.42.1\glslang\build>cmake -G "Visual Studio 14 Win64" ..  #Generate Visual Studio 2015 Win64 Project
+
+
