@@ -108,7 +108,7 @@ private:
 		glfwSetWindowSizeCallback(window, HelloTriangleApplication::onWindowResized);
 	}
 
-	void initVulkan() {
+	void initVulkan(){
 		createInstance();
 		setupDebugCallback();
 		createSurface();
@@ -177,7 +177,7 @@ private:
 	}
 
 	void recreateSwapChain() {
-		vkDeviceWaitIdle(device);
+		vkDeviceWaitIdle(device); //we shouldn't touch resources that may still be in use. recreate the SwapChain after it finish its works
 
 		cleanupSwapChain();
 
@@ -363,6 +363,7 @@ private:
 	}
 
 	void createImageViews() {
+		//ImageViews describ the usage and data layout of a image. 2D ? has depth? 3D?.....
 		swapChainImageViews.resize(swapChainImages.size());
 
 		for (size_t i = 0; i < swapChainImages.size(); i++) {
@@ -388,16 +389,22 @@ private:
 	}
 
 	void createRenderPass() {
+		/*Before we can finish creating the pipeline, we need to tell Vulkan about the framebuffer attachments
+		that will be used while rendering. We need to specify how many color and depth buffers there will be,
+		how many samples to use for each of them and how their contents should be handled throughout the rendering operations. */
+		
 		VkAttachmentDescription colorAttachment = {};
 		colorAttachment.format = swapChainImageFormat;
 		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;                  //clear the framebuffer to black before drawing a new frame.
+		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;                //The loadOp and storeOp apply to color and depth data
+		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;       //stencilLoadOp / stencilStoreOp apply to stencil data.
 		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;             //P97
 		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+
+		//Subpasses and attachment references
 		VkAttachmentReference colorAttachmentRef = {};
 		colorAttachmentRef.attachment = 0;
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -407,6 +414,7 @@ private:
 		subpass.colorAttachmentCount = 1;
 		subpass.pColorAttachments = &colorAttachmentRef;
 
+		//
 		VkSubpassDependency dependency = {};
 		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 		dependency.dstSubpass = 0;
@@ -430,12 +438,15 @@ private:
 	}
 
 	void createGraphicsPipeline() {
+		// 1.Read the shader file. 
 		auto vertShaderCode = readFile("shaders/vert.spv");
 		auto fragShaderCode = readFile("shaders/frag.spv");
-
+		//-------------------------------------------------
+		//2. Crete the shader Module
 		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 		VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
-
+		//-------------------------------------------------
+		//3.Create Pipleline the Shader Stage(tell GPU how to use the shader, the enter point, Vertex shader or Fragment shader...)
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -449,29 +460,36 @@ private:
 		fragShaderStageInfo.pName = "main";
 
 		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
+		//-------------------------------------------------
+		// 4.Vertex Input stage (describes the format of the vertex data wich will be passed to the vertex shader)
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 0;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
-
+		vertexInputInfo.vertexBindingDescriptionCount = 0;    //spacing between data and whether the data is per-vertex or per - instance
+		vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;  //type of the attributes passed to the vertex shader, which binding to load them from and at which offset
+		vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+		//-------------------------------------------------
+		//5. describes two things: what kind of geometry will be drawn from the vertices and if primitive restart should be enabled.
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		inputAssembly.primitiveRestartEnable = VK_FALSE;
+		inputAssembly.primitiveRestartEnable = VK_FALSE;  // If you set the primitiveRestartEnable member to VK_TRUE, then it¡¯s possible to break up lines and triangles in the _STRIP topology modes......
 
+		//6. A viewport basically describes the region of the framebuffer that the output will be rendered to.
 		VkViewport viewport = {};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = (float)swapChainExtent.width;
+		viewport.width = (float)swapChainExtent.width;   //the size of the swap chain and its images may differ from the WIDTH and HEIGHT of the Window
 		viewport.height = (float)swapChainExtent.height;
-		viewport.minDepth = 0.0f;
+		viewport.minDepth = 0.0f;                        //specify the range of depth values to used for the framebuffer
 		viewport.maxDepth = 1.0f;
 
+		//7. Scissor---draw the entire frame buffer
 		VkRect2D scissor = {};
 		scissor.offset = { 0, 0 };
 		scissor.extent = swapChainExtent;
 
+		//8. Combine Viewport and Scissor
 		VkPipelineViewportStateCreateInfo viewportState = {};
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 		viewportState.viewportCount = 1;
@@ -479,25 +497,45 @@ private:
 		viewportState.scissorCount = 1;
 		viewportState.pScissors = &scissor;
 
+		//9. performs depth testing, face culling and the scissor test. Wireframe rendering or fill?
 		VkPipelineRasterizationStateCreateInfo rasterizer = {};
 		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-		rasterizer.lineWidth = 1.0f;
+		rasterizer.depthClampEnable = VK_FALSE;                 //set to VK_TRUE, then fragments that are beyond the near and far planes are clamped to them as opposed to discarding them.
+		rasterizer.rasterizerDiscardEnable = VK_FALSE;          //set to VK_TRUE, then geometry never passes through the rasterizer stage.This basically disables any output to the framebuffer.
+		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;          //Fill or Wireframe or point render? Using any mode other than fill requires enabling a GPU feature.
+		rasterizer.lineWidth = 1.0f;							//The lineWidth member is straightforward, it describes the thickness of lines in terms of number of fragments.The maximum line width that is supported depends on the hardware and any line thicker than 1.0f requires you to enable the wideLines GPU feature.
 		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;         //variable specifies the vertex order for faces to be considered front-facing and can be clockwise or counterclockwise.
 		rasterizer.depthBiasEnable = VK_FALSE;
+		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+		rasterizer.depthBiasClamp = 0.0f; // Optional
+		rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
+		//10. Multisampling
 		VkPipelineMultisampleStateCreateInfo multisampling = {};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
 		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampling.minSampleShading = 1.0f; // Optional
+		multisampling.pSampleMask = nullptr; /// Optional
+		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+		multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
+		//11. Depth and stencil testing
+
+
+		//12. Color blending      contains the configuration per attached framebuffer
 		VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
 		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 		colorBlendAttachment.blendEnable = VK_FALSE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
 
+		//contains the global color blending settings (bitwise combination)........p93
 		VkPipelineColorBlendStateCreateInfo colorBlending = {};
 		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 		colorBlending.logicOpEnable = VK_FALSE;
@@ -508,7 +546,10 @@ private:
 		colorBlending.blendConstants[1] = 0.0f;
 		colorBlending.blendConstants[2] = 0.0f;
 		colorBlending.blendConstants[3] = 0.0f;
+		
+		//13. Dynamic state
 
+		//14. Pipeline layout p94
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutInfo.setLayoutCount = 0;
@@ -542,6 +583,9 @@ private:
 	}
 
 	void createFramebuffers() {
+		/*That means that we have to create a framebuffer for all of the images in the swap chain
+		and use the one that corresponds to the retrieved image at drawing time.*/
+
 		swapChainFramebuffers.resize(swapChainImageViews.size());
 
 		for (size_t i = 0; i < swapChainImageViews.size(); i++) {
@@ -565,6 +609,9 @@ private:
 	}
 
 	void createCommandPool() {
+		//Command pools manage the memory that is used to store the buffers and command buffers are allocated from them.
+		//We're going to record commands for drawing, which is why we've chosen the graphics queue family.
+
 		QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
 
 		VkCommandPoolCreateInfo poolInfo = {};
@@ -577,7 +624,12 @@ private:
 	}
 
 	void createCommandBuffers() {
+		/*Commands in Vulkan, like drawing operations and memory transfers, are not executed directly using function calls.
+		 You have to record all of the operations you want to perform in command buffer objects. */
+
 		commandBuffers.resize(swapChainFramebuffers.size());
+
+		//Command pools manage the memory that is used to store the buffers and command buffers are allocated from them.
 
 		VkCommandBufferAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -585,10 +637,12 @@ private:
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
 
+		//Command buffer allocation
 		if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate command buffers!");
 		}
 
+		//Starting command buffer recording
 		for (size_t i = 0; i < commandBuffers.size(); i++) {
 			VkCommandBufferBeginInfo beginInfo = {};
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -596,6 +650,7 @@ private:
 
 			vkBeginCommandBuffer(commandBuffers[i], &beginInfo);
 
+			//Starting a render pass recording
 			VkRenderPassBeginInfo renderPassInfo = {};
 			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 			renderPassInfo.renderPass = renderPass;
@@ -609,10 +664,12 @@ private:
 
 			vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+			//Basic drawing command
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
 
+			//Finishing up
 			vkCmdEndRenderPass(commandBuffers[i]);
 
 			if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
@@ -633,6 +690,12 @@ private:
 	}
 
 	void drawFrame() {
+		//1. Acquire an image from the swap chain
+		//2. Execute the command buffer with that image as attachment in the framebuffer
+		//3. Return the image to the swap chain for presentation
+
+		//Each of these events is set in motion using a single function call, but they are executed asynchronously. The function calls will return before the operations are actually finished and the order of execution is also undefined. 
+
 		uint32_t imageIndex;
 		VkResult result = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
@@ -643,6 +706,8 @@ private:
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
+
+		//Submitting the command buffer
 
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -664,6 +729,9 @@ private:
 			throw std::runtime_error("failed to submit draw command buffer!");
 		}
 
+		//Presentation
+		//submitting the result back to the swap chain to have it eventually show up on the screen.
+
 		VkPresentInfoKHR presentInfo = {};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
@@ -676,6 +744,7 @@ private:
 
 		presentInfo.pImageIndices = &imageIndex;
 
+		// waiting for presentation to finish before starting to draw the next frame:
 		result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
@@ -688,6 +757,7 @@ private:
 		vkQueueWaitIdle(presentQueue);
 	}
 
+	//Create a shader Module from the byte code
 	VkShaderModule createShaderModule(const std::vector<char>& code) {
 		VkShaderModuleCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -837,6 +907,7 @@ private:
 		return indices;
 	}
 
+	//Extensions---->Windows,Andriod.....Content
 	std::vector<const char*> getRequiredExtensions() {
 		std::vector<const char*> extensions;
 
@@ -881,16 +952,16 @@ private:
 	}
 
 	static std::vector<char> readFile(const std::string& filename) {
-		std::ifstream file(filename, std::ios::ate | std::ios::binary);
+		std::ifstream file(filename, std::ios::ate | std::ios::binary); //ate: Start reading at the end of the file
 
 		if (!file.is_open()) {
 			throw std::runtime_error("failed to open file!");
 		}
 
-		size_t fileSize = (size_t)file.tellg();
+		size_t fileSize = (size_t)file.tellg(); //Returns the position of the current character in the input stream.
 		std::vector<char> buffer(fileSize);
 
-		file.seekg(0);
+		file.seekg(0);                          //Sets the position of the next character to be extracted from the input stream
 		file.read(buffer.data(), fileSize);
 
 		file.close();
